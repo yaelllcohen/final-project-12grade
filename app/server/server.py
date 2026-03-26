@@ -158,7 +158,6 @@ class Server:
 
         return {"status": "error", "message": "Invalid action."}
 
-
     def upload_binary_file(self, request):
         token_check = self.check_token_validity(request)
         if token_check["status"] != "success":
@@ -182,7 +181,14 @@ class Server:
             with open(save_path, "wb") as f:
                 f.write(raw)
 
-            return {"status": "success", "message": "File uploaded", "saved_as": original_name}
+            # שמירת מטא-דאטה במסד הנתונים
+            self.db_manager.add_user_file(username, original_name, save_path)
+
+            return {
+                "status": "success",
+                "message": "File uploaded",
+                "saved_as": original_name
+            }
 
         except Exception as e:
             return {"status": "error", "message": f"Upload failed: {e}"}
@@ -253,6 +259,10 @@ class Server:
             file_path = os.path.join(user_folder, filename + ".json")
             try:
                 os.remove(file_path)
+
+                # מחיקת המטא-דאטה מה-DB
+                self.db_manager.delete_user_file_record(username, filename + ".json")
+
                 return {"status": "success", "message": "File Deleted."}
             except Exception:
                 return {"status": "error", "message": "Failed to delete file."}
@@ -280,6 +290,7 @@ class Server:
 
         return {"status": "error", "message": "Username or filename is missing."}
 
+
     def save_file_on_server(self, request):
         token_check = self.check_token_validity(request)
         if token_check["status"] != "success":
@@ -296,7 +307,13 @@ class Server:
             with open(file_path, "w", encoding="utf-8") as file:
                 file.write("")
 
-            return {"status": "success", "message": f"File '{filename}' created successfully for user '{username}'."}
+            # שמירת מטא-דאטה במסד הנתונים
+            self.db_manager.add_user_file(username, filename + ".json", file_path)
+
+            return {
+                "status": "success",
+                "message": f"File '{filename}' created successfully for user '{username}'."
+            }
 
         return {"status": "error", "message": "Username or filename is missing."}
 
@@ -459,7 +476,7 @@ class Server:
             return token_check
 
         username = request.get("username")
-        filename = request.get("filename")  # שם מלא כולל סיומת, לדוגמה a.jpg
+        filename = request.get("filename")
 
         if not username or not filename:
             return {"status": "error", "message": "Username or filename is missing."}
@@ -472,6 +489,10 @@ class Server:
 
         try:
             os.remove(file_path)
+
+            # מחיקת המטא-דאטה מה-DB
+            self.db_manager.delete_user_file_record(username, filename)
+
             return {"status": "success", "message": "Uploaded file deleted."}
         except Exception as e:
             return {"status": "error", "message": f"Failed to delete file: {e}"}

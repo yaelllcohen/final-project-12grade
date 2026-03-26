@@ -111,3 +111,84 @@ class DatabaseManager:
             return cursor.rowcount > 0
         finally:
             conn.close()
+
+    def add_user_file(self, username, filename, file_path):
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+
+            # אם כבר קיימת רשומה לאותו משתמש+קובץ, נמחק כדי לא ליצור כפילות
+            cursor.execute(
+                "DELETE FROM user_files WHERE username=? AND filename=?",
+                (username, filename)
+            )
+
+            cursor.execute(
+                """
+                INSERT INTO user_files (username, filename, file_path)
+                VALUES (?, ?, ?)
+                """,
+                (username, filename, file_path)
+            )
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"Error adding user file: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def delete_user_file_record(self, username, filename):
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "DELETE FROM user_files WHERE username=? AND filename=?",
+                (username, filename)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            print(f"Error deleting user file record: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def get_user_files(self, username):
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT id, username, filename, file_path, upload_date
+                FROM user_files
+                WHERE username=?
+                ORDER BY upload_date DESC
+                """,
+                (username,)
+            )
+            return cursor.fetchall()
+        except Exception as e:
+            print(f"Error getting user files: {e}")
+            return []
+        finally:
+            conn.close()
+
+    def file_record_exists(self, username, filename):
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT 1 FROM user_files
+                WHERE username=? AND filename=?
+                LIMIT 1
+                """,
+                (username, filename)
+            )
+            return cursor.fetchone() is not None
+        except Exception as e:
+            print(f"Error checking file record exists: {e}")
+            return False
+        finally:
+            conn.close()
