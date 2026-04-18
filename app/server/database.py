@@ -5,13 +5,26 @@ from app.server.Hashing import Hashing
 
 
 class DatabaseManager:
+    """
+    טענת כניסה: אין.
+טענת יציאה: מאתחלת את המחלקה, שומרת את מיקום מסד הנתונים וקוראת לפונקציה היוצרת את הטבלאות הדרושות.
+    """
     def __init__(self):
-        self.database_file = DATABASE_FILE
+        self.database_file = DATABASE_FILE #הנתיב לקובץ מסד הנתונים
         self.create_tables()
 
+    """
+    טענת כניסה: אין.
+טענת יציאה: פותחת ומחזירה חיבור למסד הנתונים מסוג SQLite.
+"""
     def get_connection(self):
         return sqlite3.connect(self.database_file)
 
+    """
+    טענת כניסה: אין.
+טענת יציאה: יוצרת את הטבלאות users ו־user_files אם הן אינן קיימות,
+ ובודקת אם יש צורך להוסיף את השדה is_admin למסד ישן.
+"""
     def create_tables(self):
         conn = self.get_connection()
         try:
@@ -32,7 +45,6 @@ class DatabaseManager:
                 FOREIGN KEY (username) REFERENCES users (username)
             )''')
 
-            # אם יש DB ישן בלי is_admin – נוסיף את העמודה
             cursor.execute("PRAGMA table_info(users)")
             cols = [row[1] for row in cursor.fetchall()]
             if "is_admin" not in cols:
@@ -42,6 +54,11 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    """
+    טענת כניסה: username – שם משתמש, password – סיסמה.
+טענת יציאה: יוצר משתמש חדש במסד הנתונים לאחר ביצוע Hash לסיסמה באמצעות bcrypt. 
+אם שם המשתמש כבר קיים, מוחזרת תשובת כישלון.
+"""
     def register_user(self, username, password):
         conn = self.get_connection()
         try:
@@ -60,6 +77,10 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    """
+    טענת כניסה: username – שם המשתמש המבוקש.
+טענת יציאה: מחזיר את נתוני המשתמש מתוך מסד הנתונים, כולל הסיסמה וההרשאה, אם המשתמש קיים.
+"""
     def get_user(self, username):
         conn = self.get_connection()
         try:
@@ -69,12 +90,20 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    """
+    טענת כניסה: username – שם משתמש, password – סיסמה.
+טענת יציאה: בודק אם המשתמש קיים ואם הסיסמה שהוזנה תואמת לסיסמה השמורה במסד הנתונים.
+"""
     def authenticate_user(self, username, password):
         user = self.get_user(username)
         if user is None:
             return False
         return Hashing.check_password(user[1], password)
 
+    """
+    טענת כניסה: username – שם המשתמש.
+טענת יציאה: בודק האם למשתמש יש הרשאות מנהל ומחזיר ערך בוליאני בהתאם.
+"""
     def is_admin(self, username) -> bool:
         user = self.get_user(username)
         if not user:
@@ -83,6 +112,10 @@ class DatabaseManager:
 
     # -------- Admin operations --------
 
+    """
+    טענת כניסה: אין.
+טענת יציאה: מחזיר רשימה של כל המשתמשים במערכת יחד עם מצב ההרשאה שלהם (is_admin).
+"""
     def get_all_users(self):
         conn = self.get_connection()
         try:
@@ -92,6 +125,10 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    """
+    טענת כניסה: username – שם המשתמש, is_admin – ערך הרשאה (0 או 1).
+טענת יציאה: מעדכן את הרשאת המנהל של המשתמש במסד הנתונים.
+"""
     def set_admin(self, username, is_admin: int) -> bool:
         conn = self.get_connection()
         try:
@@ -102,6 +139,10 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    """
+    טענת כניסה: username – שם המשתמש למחיקה.
+    טענת יציאה: מוחק משתמש ממסד הנתונים ומחזיר האם הפעולה הצליחה.
+    """
     def delete_user(self, username) -> bool:
         conn = self.get_connection()
         try:
@@ -112,12 +153,17 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    """
+    טענת כניסה: username - שם המשתמש, filename - שם הקובץ, file_path – נתיב הקובץ בשרת.
+טענת יציאה: מוסיף רשומת מטא־דאטה חדשה לטבלת user_files.
+ אם כבר קיימת רשומה לאותו קובץ, היא נמחקת קודם כדי למנוע כפילות.
+"""
     def add_user_file(self, username, filename, file_path):
         conn = self.get_connection()
         try:
             cursor = conn.cursor()
 
-            # אם כבר קיימת רשומה לאותו משתמש+קובץ, נמחק כדי לא ליצור כפילות
+            # אם כבר קיימת רשומה לאותו משתמש+קובץ, זה יימחק כדי לא ליצור כפילות
             cursor.execute(
                 "DELETE FROM user_files WHERE username=? AND filename=?",
                 (username, filename)
@@ -138,6 +184,10 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    """
+    טענת כניסה: username – שם המשתמש, filename – שם הקובץ.
+טענת יציאה: מוחק את רשומת המטא־דאטה של הקובץ מטבלת user_files.
+"""
     def delete_user_file_record(self, username, filename):
         conn = self.get_connection()
         try:
@@ -154,6 +204,10 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    """
+    טענת כניסה: username – שם המשתמש.
+טענת יציאה: מחזיר את כל רשומות הקבצים של המשתמש מטבלת user_files, ממוינות לפי תאריך העלאה.
+"""
     def get_user_files(self, username):
         conn = self.get_connection()
         try:
@@ -174,6 +228,10 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    """
+    טענת כניסה: username – שם המשתמש, filename – שם הקובץ.
+טענת יציאה: בודק האם קיימת רשומה של הקובץ עבור המשתמש במסד הנתונים ומחזיר ערך בוליאני בהתאם.
+"""
     def file_record_exists(self, username, filename):
         conn = self.get_connection()
         try:
