@@ -3,18 +3,24 @@ import threading
 import json
 import os
 from app.server.database import DatabaseManager
-import secrets
+import secrets #ספרייה מובנית בפייתון שנועדה ליצור ערכים אקראיים בצורה קריפטוגרפית
 import base64
 
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.backends import default_backend
+#ספרייה מתקדמת להצפנה בפייתון
+from cryptography.hazmat.primitives import serialization #ממיר מפתחות RSA לפורמט שאפשר לשלוח (PEM)
+from cryptography.hazmat.primitives.asymmetric import padding #שכבת הגנה נוספת להצפנת RSA
+from cryptography.hazmat.primitives import hashes #אלגוריתמים של hash
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes #הצפנה סימטרית AES
+from cryptography.hazmat.backends import default_backend #המנוע שמבצע את ההצפנה בפועל
 END_MARKER = b"-- End Request --"
 
 
 class Server:
+    """
+    טענת כניסה: כתובת השרת ומספר הפורט
+    טענת יציאה: מאתחלת את השרת, יוצרת בוקט ומאתחלת גישה למסד הנתונים,
+    יוצרת מבנה לניהול סשנים ומוודאת שקיימת תיקיית server_files
+    """
     def __init__(self, host="127.0.0.1", port=5000):
         self.host = host
         self.port = port
@@ -23,6 +29,12 @@ class Server:
         self.active_sessions = {}  # username -> token
         os.makedirs("server_files", exist_ok=True)
 
+    """
+    טענת כניסה: אין 
+    טענת יציאה: מפעילה את השרת, מאזינה לחיבורים נכנסים, 
+    מקבלת מפתח ציבורי מהלקוח, יוצרת מפתח AES וnonce, 
+    מצפינה אותם ושולחת ללקוח. לאחר מכן פותחת Thread נפרד לכל לקוח.
+    """
     def start(self):
         self.server_socket.bind((self.host, self.port))
         self.server_socket.listen(5)
@@ -79,14 +91,27 @@ class Server:
             client_thread = threading.Thread(target=self.handle_client, args=(client_socket, cipher))
             client_thread.start()
 
+    """
+    טענת כניסה: נתונים להצפנה (data) ואובייקט להצפנה (cipher).
+    טענת יציאה: מחזירה את הנתונים לאחר ההצפנה באמצעות AES.
+    
+    """
     def encrypt(self, data: bytes, cipher) -> bytes:
         aes_encryptor = cipher.encryptor()
         return aes_encryptor.update(data) + aes_encryptor.finalize()
 
+    """
+    טענת כניסה: נתונים מוצפנים (data) ואובייקט ההצפנה (cipher).
+    טענת יציאה: מפענחת את הנתונים ומחזירה אותם בפורמט קריא.
+    """
     def decrypt(self, data: bytes, cipher) -> bytes:
         decryptor = cipher.decryptor()
         return decryptor.update(data) + decryptor.finalize()
 
+    """
+    טענת כניסה: סוקט של הלקוח ואובייקט הצפנה.
+    טענת יציאה: מטפלת בכל הבקשות שמגיעות מלקוח מסויים: קוראת הודעה מלאה עד END_MARKER, מפענחת אותה, מעבירה לעיבוד, מצפינה את התשובה ושולחת אותה חזרה.
+    """
     def handle_client(self, client_socket, cipher):
         try:
             buffer = b""
@@ -115,7 +140,10 @@ class Server:
             print(f"Error handling client: {e}")
         finally:
             client_socket.close()
-
+    """
+    טענת כניסה: סוג הפעולה שנשלחה (action) ותוכן הבקשה (request).
+    טענת יציאה: מנתבת את הבקשה לפונקציה מתאימה לפי סוג הפעולה, כגון הרשמה, התחברות, יצירת קובץ, העלאה, הורדה או פעולות מנהל.
+    """
     def process_request(self, action, request):
         if action == "register":
             return self.register_user(request)
@@ -158,6 +186,10 @@ class Server:
 
         return {"status": "error", "message": "Invalid action."}
 
+    """
+    טענת כניסה: request - בקשה הכוללת original_name, token, username וdata.
+    טענת יציאה: מפענחת קובץ שהתקבל לbase64, שומרת אותו בתיקיית uploads של המשתמש ומוסיפה מידע על הקבצים לטבלת user_files.
+    """
     def upload_binary_file(self, request):
         token_check = self.check_token_validity(request)
         if token_check["status"] != "success":
@@ -193,8 +225,10 @@ class Server:
         except Exception as e:
             return {"status": "error", "message": f"Upload failed: {e}"}
 
-    # ---------------- Auth helpers ----------------
-
+    """
+    טענת כניסה: request - בקשה הכוללת שם משתמש וטוקן.
+    טענת יציאה: בודקת האם הטוקן שנשלח תואם לסשן הפעיל של המשתמש ומחזירה תשובת הצלחה או שגיאה.
+    """
     def check_token_validity(self, request):
         username = request.get("username")
         token = request.get("token")
@@ -207,6 +241,10 @@ class Server:
 
         return {"status": "success", "message": "Token is valid."}
 
+    """
+    טענת כניסה: request - בקשה הכוללת שם משתמש וטוקן.
+    טענת יציאה: בודקת שהטוקן תקף ושהמשתמש הוא מנהל מערכת. מחזירה תשובת הצלחה או שגיאה.
+    """
     def require_admin(self, request):
         token_check = self.check_token_validity(request)
         if token_check["status"] != "success":
@@ -218,12 +256,20 @@ class Server:
 
         return {"status": "success", "message": "Admin ok."}
 
+    """
+    טענת כניסה: אין
+    טענת יציאה: יוצרת ומחזירה Token אקראי חדש עבור סשן של משתמש.
+    """
     @staticmethod
     def generate_token():
         return secrets.token_hex(16)
 
     # ---------------- Users ----------------
 
+    """
+    טענת כניסה: request- בקשה הכוללת שם משתמש וסיסמה.
+    טענת יציאה: רושמת משתמש חדש במסד הנתונים. במקרה של הצלחה נוצרת גם סשן חדשה עם טוקן
+    """
     def register_user(self, request):
         username = request.get("username")
         password = request.get("password")
@@ -234,6 +280,10 @@ class Server:
             return {"status": "success", "message": "Registration successful!", "token": token}
         return {"status": "error", "message": "Username already exists."}
 
+    """
+    טענת כניסה: request- בקשה הכוללת שם משתמש וסיסמה.
+    טענת יציאה: מאמתת את פרטי ההתחברות מול מסד הנתונים. אם ההתחברות מצליחה, נוצר Token חדש ונשלח ללקוח.
+    """
     def login_user(self, request):
         username = request.get("username")
         password = request.get("password")
@@ -246,6 +296,10 @@ class Server:
 
     # ---------------- File operations ----------------
 
+    """
+    טענת כניסה: request – בקשה הכוללת שם משתמש, טוקן ושם קובץ.
+    טענת יציאה: מוחק את הקובץ מהשרת וגם מסיר את הרשומה שלו ממסד הנתונים.
+    """
     def delete_file(self, request):
         token_check = self.check_token_validity(request)
         if token_check["status"] != "success":
@@ -269,6 +323,10 @@ class Server:
 
         return {"status": "error", "message": "Username or filename is missing."}
 
+    """
+    טענת כניסה: request – בקשה הכוללת שם משתמש, טוקן ושם קובץ.
+    טענת יציאה: מחזיר את תוכן הקובץ מהשרת בפורמט JSON.
+    """
     def get_file_content(self, request):
         token_check = self.check_token_validity(request)
         if token_check["status"] != "success":
@@ -317,6 +375,10 @@ class Server:
 
         return {"status": "error", "message": "Username or filename is missing."}
 
+    """
+    טענת כניסה: request – בקשה הכוללת שם משתמש, טוקן, שם קובץ ותוכן.
+    טענת יציאה: מעדכן את תוכן הקובץ הקיים בשרת לפי הנתונים שנשלחו.
+    """
     def update_file_content(self, request):
         token_check = self.check_token_validity(request)
         if token_check["status"] != "success":
@@ -337,6 +399,10 @@ class Server:
 
         return {"status": "error", "message": "Username or filename is missing."}
 
+    """
+    טענת כניסה: request – בקשה הכוללת שם משתמש, טוקן ושם קובץ.
+    טענת יציאה: בודק אם הקובץ קיים ומחזיר תשובה בהתאם.
+    """
     def check_file_exists(self, request):
         token_check = self.check_token_validity(request)
         if token_check["status"] != "success":
@@ -355,6 +421,10 @@ class Server:
 
         return {"status": "error", "message": "Username or filename is missing."}
 
+    """
+    טענת כניסה: request – בקשה הכוללת שם משתמש וטוקן.
+    טענת יציאה: מחזיר רשימת כל הקבצים של המשתמש.
+    """
     def get_user_projects(self, request):
         token_check = self.check_token_validity(request)
         if token_check["status"] != "success":
@@ -376,58 +446,10 @@ class Server:
 
         return {"status": "success", "projects": []}
 
-    # ---------------- Admin operations ----------------
-
-    def get_users(self, request):
-        admin_check = self.require_admin(request)
-        if admin_check["status"] != "success":
-            return admin_check
-
-        users = self.db_manager.get_all_users()
-        # users is list of tuples (username, is_admin)
-        payload = [{"username": u, "is_admin": bool(a)} for (u, a) in users]
-        return {"status": "success", "users": payload}
-
-    def set_admin(self, request):
-        admin_check = self.require_admin(request)
-        if admin_check["status"] != "success":
-            return admin_check
-
-        target_username = request.get("target_username")
-        is_admin = request.get("is_admin")
-
-        if target_username is None or is_admin is None:
-            return {"status": "error", "message": "target_username or is_admin missing."}
-
-        ok = self.db_manager.set_admin(target_username, 1 if is_admin else 0)
-        if ok:
-            return {"status": "success", "message": "Admin updated."}
-        return {"status": "error", "message": "User not found."}
-
-    def delete_user_admin(self, request):
-        admin_check = self.require_admin(request)
-        if admin_check["status"] != "success":
-            return admin_check
-
-        target_username = request.get("target_username")
-        if not target_username:
-            return {"status": "error", "message": "target_username missing."}
-
-        # לא לתת לאדמין למחוק את עצמו (כמו בקוד הישן שלך)
-        if target_username == request.get("username"):
-            return {"status": "error", "message": "You can't delete yourself."}
-
-        ok = self.db_manager.delete_user(target_username)
-        if ok:
-            # אופציונלי: לנקות token אם המשתמש מחובר
-            self.active_sessions.pop(target_username, None)
-            return {"status": "success", "message": "User deleted."}
-        return {"status": "error", "message": "User not found."}
-
-    def stop(self):
-        self.server_socket.close()
-        print("Server has been stopped.")
-
+    """
+    טענת כניסה: request – בקשה הכוללת שם משתמש וטוקן.
+    טענת יציאה: מחזיר רשימת קבצים שהמשתמש העלה.
+    """
     def get_uploaded_files(self, request):
         token_check = self.check_token_validity(request)
         if token_check["status"] != "success":
@@ -442,6 +464,10 @@ class Server:
 
         return {"status": "success", "files": []}
 
+    """
+    טענת כניסה: request – בקשה הכוללת שם משתמש, טוקן ושם קובץ.
+    טענת יציאה: מחזיר את הקובץ כשהוא מקודד ב־Base64.
+    """
     def download_binary_file(self, request):
         token_check = self.check_token_validity(request)
         if token_check["status"] != "success":
@@ -470,6 +496,10 @@ class Server:
         except Exception as e:
             return {"status": "error", "message": f"Download failed: {e}"}
 
+    """
+    טענת כניסה: request – בקשה הכוללת שם משתמש, טוקן ושם קובץ.
+    טענת יציאה: מוחק קובץ שהועלה וגם את הרשומה שלו מהמסד.
+    """
     def delete_uploaded_file(self, request):
         token_check = self.check_token_validity(request)
         if token_check["status"] != "success":
@@ -496,6 +526,74 @@ class Server:
             return {"status": "success", "message": "Uploaded file deleted."}
         except Exception as e:
             return {"status": "error", "message": f"Failed to delete file: {e}"}
+
+
+    # ---------------- Admin operations ----------------
+
+    """
+    טענת כניסה: request – בקשה הכוללת שם משתמש וטוקן.
+    טענת יציאה: מחזיר רשימת כל המשתמשים במערכת (למנהל בלבד)
+    """
+    def get_users(self, request):
+        admin_check = self.require_admin(request)
+        if admin_check["status"] != "success":
+            return admin_check
+
+        users = self.db_manager.get_all_users()
+        # users is list of tuples (username, is_admin)
+        payload = [{"username": u, "is_admin": bool(a)} for (u, a) in users]
+        return {"status": "success", "users": payload}
+
+    """
+    טענת כניסה: request – בקשה הכוללת שם משתמש, טוקן, משתמש יעד והרשאה.
+    טענת יציאה: מעדכן הרשאות מנהל למשתמש.
+    """
+    def set_admin(self, request):
+        admin_check = self.require_admin(request)
+        if admin_check["status"] != "success":
+            return admin_check
+
+        target_username = request.get("target_username")
+        is_admin = request.get("is_admin")
+
+        if target_username is None or is_admin is None:
+            return {"status": "error", "message": "target_username or is_admin missing."}
+
+        ok = self.db_manager.set_admin(target_username, 1 if is_admin else 0)
+        if ok:
+            return {"status": "success", "message": "Admin updated."}
+        return {"status": "error", "message": "User not found."}
+
+    """
+    טענת כניסה: request – בקשה הכוללת שם משתמש, טוקן ומשתמש יעד.
+    טענת יציאה: מוחק משתמש מהמערכת (לא ניתן למחוק את המשתמש עצמו).
+    """
+    def delete_user_admin(self, request):
+        admin_check = self.require_admin(request)
+        if admin_check["status"] != "success":
+            return admin_check
+
+        target_username = request.get("target_username")
+        if not target_username:
+            return {"status": "error", "message": "target_username missing."}
+
+        # לא לתת לאדמין למחוק את עצמו
+        if target_username == request.get("username"):
+            return {"status": "error", "message": "You can't delete yourself."}
+
+        ok = self.db_manager.delete_user(target_username)
+        if ok:
+            self.active_sessions.pop(target_username, None)
+            return {"status": "success", "message": "User deleted."}
+        return {"status": "error", "message": "User not found."}
+
+    """
+    טענת כניסה: אין.
+    טענת יציאה: סוגר את השרת ומפסיק את פעולתו.
+    """
+    def stop(self):
+        self.server_socket.close()
+        print("Server has been stopped.")
 
 
 if __name__ == "__main__":
