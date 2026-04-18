@@ -50,7 +50,6 @@ def create_toolbar(parent, text_widget):
                     font=("Delicious", int(tag_name.split("_")[1]), " ".join(existing_tags))
                 )
 
-                # NOTE: זה היה אצלך "existing_tags[0]" — השארתי את אותו רעיון, רק בלי לקרוס אם אין
                 text_widget.tag_remove(existing_tags[0], start, end)
             else:
                 text_widget.tag_configure(tag_name, font=("Delicious", int(tag_name.split("_")[1])))
