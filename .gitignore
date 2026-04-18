@@ -4,3 +4,4 @@ __pycache__/
 .idea/
 data/database.db
 server_files/
+app/server/data/db.database
