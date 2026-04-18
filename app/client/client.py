@@ -12,6 +12,10 @@ SERVER_PORT = 5000
 
 
 class ClientSocket:
+    """
+    טענת כניסה: אין.
+טענת יציאה: יוצר חיבור לשרת, מייצר זוג מפתחות RSA, שולח את המפתח הציבורי לשרת, מקבל מפתח AES ו־nonce כשהם מוצפנים, מפענח אותם ויוצר אובייקט Cipher לצורך הצפנה ופענוח של התקשורת.
+    """
     def __init__(self):
         try:
             # RSA keys
@@ -25,7 +29,7 @@ class ClientSocket:
 
             self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.client.connect((SERVER_IP, SERVER_PORT))
-            self.data = {}
+            self.data = {} #מילון נתונים מקומי של הלקוח ששומר מידע על המשתמש המחובר
 
             print("Connected to server successfully.")
             print("Sending public key to the server.")
@@ -53,6 +57,7 @@ class ClientSocket:
             )
             self.client.send("Nonce key received".encode('utf-8'))
 
+            #אובייקט הצפנה מסוג AES
             self.cipher = Cipher(
                 algorithms.AES(aes_key),
                 modes.CFB(nonce),
@@ -63,14 +68,26 @@ class ClientSocket:
             print(f"Error while connecting to the server: {e}")
             self.client = None
 
+    """
+    טענת כניסה: data – נתונים להצפנה.
+טענת יציאה: מחזיר את הנתונים לאחר הצפנה באמצעות AES.
+"""
     def encrypt(self, data: bytes) -> bytes:
         aes_encryptor = self.cipher.encryptor()
         return aes_encryptor.update(data) + aes_encryptor.finalize()
 
+    """
+    טענת כניסה: data – נתונים מוצפנים.
+טענת יציאה: מפענח את הנתונים ומחזיר אותם בפורמט קריא.
+    """
     def decrypt(self, data: bytes) -> bytes:
         aes_decryptor = self.cipher.decryptor()
         return aes_decryptor.update(data) + aes_decryptor.finalize()
 
+    """
+    טענת כניסה: action – סוג הפעולה המבוקשת, data – נתוני הבקשה.
+טענת יציאה: יוצר הודעת JSON, מוסיף אליה את ה־token וה־username אם קיימים, מצפין את ההודעה, שולח אותה לשרת, מקבל תשובה מוצפנת, מפענח אותה ומחזיר את הנתונים בפורמט JSON.
+"""
     def send_request(self, action, data):
         if self.client is None:
             return {"status": "error", "message": "No connection established."}
@@ -106,6 +123,10 @@ class ClientSocket:
         except Exception as e:
             return {"status": "error", "message": f"Connection error: {e}"}
 
+    """
+    טענת כניסה: אין.
+טענת יציאה: סוגר את חיבור ה־socket של הלקוח מול השרת.
+"""
     def close(self):
         if self.client:
             self.client.close()
