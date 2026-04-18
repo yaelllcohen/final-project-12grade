@@ -6,6 +6,11 @@ import bcrypt
 
 class Hashing:
 
+    """
+    טענת כניסה: password – סיסמה בטקסט רגיל.
+טענת יציאה: מחזיר את הסיסמה לאחר Hash באמצעות bcrypt כולל salt אקראי.
+
+    """
     @staticmethod
     def hash_password(password: str) -> bytes:
         """
@@ -21,6 +26,10 @@ class Hashing:
 
         return hashed  # Returns the hashed password
 
+    """
+    טענת כניסה: hashed_password – סיסמה מוצפנת מהמסד, password – סיסמה שהוזנה על ידי המשתמש.
+טענת יציאה: בודק האם הסיסמה שהוזנה תואמת לסיסמה המוצפנת ומחזיר אמת או שקר בהתאם.
+"""
     @staticmethod
     def check_password(hashed_password: bytes, password: str) -> bool:
         """
