@@ -82,7 +82,6 @@ class FirstScreenAfterLoginPink:
         if resp_projects.get("status") == "success":
             projects = resp_projects.get("projects", [])
             for p in projects:
-                # p בלי סיומת (לפי השרת שלך)
                 self.files_listbox.insert(tk.END, p)
         else:
             messagebox.showerror("Error", resp_projects.get("message", "Failed to load projects."))
@@ -184,7 +183,6 @@ class FirstScreenAfterLoginPink:
                 raw = f.read()
 
             payload = {
-                # חשוב! השרת צריך לדעת למי לשמור + token לבדיקה
                 "username": self.username,
                 "token": self.client_socket.data.get("token"),
 
@@ -196,7 +194,7 @@ class FirstScreenAfterLoginPink:
 
             if resp.get("status") == "success":
                 messagebox.showinfo("Uploaded", f"Uploaded: {resp.get('saved_as')}")
-                # חשוב! לרענן רשימה אחרי העלאה
+                #  לרענן רשימה אחרי העלאה
                 self.load_projects()
             else:
                 messagebox.showerror("Error", resp.get("message", "Upload failed"))
